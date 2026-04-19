@@ -1,6 +1,6 @@
 /**
  *
- *  @file basic_spawn.cpp
+ *  @file check_status.cpp
  *  @author Gaspard Kirira
  *
  *  Copyright 2026, Gaspard Kirira.
@@ -20,16 +20,22 @@
 int main()
 {
   vix::process::Command command("echo");
-  command.arg("hello from vix::process");
+  command.arg("status example");
 
-  auto result = vix::process::spawn(command);
-
-  if (!result)
+  auto spawned = vix::process::spawn(command);
+  if (!spawned)
   {
-    vix::eprint("spawn failed:", result.error().message());
+    vix::eprint("spawn failed:", spawned.error().message());
     return 1;
   }
 
-  vix::print("spawned process id =", result.value().id());
+  auto running = vix::process::status(spawned.value());
+  if (!running)
+  {
+    vix::eprint("status failed:", running.error().message());
+    return 1;
+  }
+
+  vix::print("process running =", running.value());
   return 0;
 }

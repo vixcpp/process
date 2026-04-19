@@ -1,6 +1,6 @@
 /**
  *
- *  @file wait_process.cpp
+ *  @file terminate_process.cpp
  *  @author Gaspard Kirira
  *
  *  Copyright 2026, Gaspard Kirira.
@@ -19,8 +19,8 @@
 
 int main()
 {
-  vix::process::Command command("echo");
-  command.arg("waiting example");
+  vix::process::Command command("sleep");
+  command.arg("5");
 
   auto spawned = vix::process::spawn(command);
   if (!spawned)
@@ -29,13 +29,13 @@ int main()
     return 1;
   }
 
-  auto waited = vix::process::wait(spawned.value());
-  if (!waited)
+  auto err = vix::process::terminate(spawned.value());
+  if (err)
   {
-    vix::eprint("wait failed:", waited.error().message());
+    vix::eprint("terminate failed:", err.message());
     return 1;
   }
 
-  vix::print("process exited with code =", waited.value());
+  vix::print("process termination requested:", spawned.value().id());
   return 0;
 }
