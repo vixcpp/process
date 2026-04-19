@@ -14,6 +14,8 @@
  *
  */
 
+#include <utility>
+
 #include <vix/process/Spawn.hpp>
 #include <vix/process/ProcessError.hpp>
 
@@ -25,8 +27,7 @@
 
 namespace vix::process
 {
-
-  SpawnResult spawn(const Command &command)
+  SpawnResult spawn(Command command)
   {
     if (!command.valid())
     {
