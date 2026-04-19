@@ -14,7 +14,8 @@
  *
  */
 
-#include <vix/print.hpp>
+#include <iostream>
+
 #include <vix/process/Process.hpp>
 
 int main()
@@ -25,17 +26,17 @@ int main()
   auto spawned = vix::process::spawn(command);
   if (!spawned)
   {
-    vix::eprint("spawn failed:", spawned.error().message());
+    std::cerr << "spawn failed: " << spawned.error().message() << '\n';
     return 1;
   }
 
   auto waited = vix::process::wait(spawned.value());
   if (!waited)
   {
-    vix::eprint("wait failed:", waited.error().message());
+    std::cerr << "wait failed: " << waited.error().message() << '\n';
     return 1;
   }
 
-  vix::print("process exited with code =", waited.value());
+  std::cout << "process exited with code = " << waited.value() << '\n';
   return 0;
 }

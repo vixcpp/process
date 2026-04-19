@@ -151,6 +151,6 @@ examples/
 ## License
 
 MIT License
-Copyright (c) 2026 Gaspard Kirira
+Copyright (c) 2026 Gaspard Kirira \
 https://github.com/vixcpp/vix
 

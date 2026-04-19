@@ -14,7 +14,8 @@
  *
  */
 
-#include <vix/print.hpp>
+#include <iostream>
+
 #include <vix/process/Process.hpp>
 
 int main()
@@ -26,10 +27,10 @@ int main()
 
   if (!result)
   {
-    vix::eprint("spawn failed:", result.error().message());
+    std::cerr << "spawn failed: " << result.error().message() << '\n';
     return 1;
   }
 
-  vix::print("spawned process id =", result.value().id());
+  std::cout << "spawned process id = " << result.value().id() << '\n';
   return 0;
 }

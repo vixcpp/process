@@ -15,7 +15,6 @@ add_executable(vix_process_basic_spawn
 target_link_libraries(vix_process_basic_spawn
   PRIVATE
     vix::process
-    vix::print
 )
 
 add_executable(vix_process_wait_process
@@ -25,7 +24,6 @@ add_executable(vix_process_wait_process
 target_link_libraries(vix_process_wait_process
   PRIVATE
     vix::process
-    vix::print
 )
 
 add_executable(vix_process_capture_output
@@ -35,7 +33,6 @@ add_executable(vix_process_capture_output
 target_link_libraries(vix_process_capture_output
   PRIVATE
     vix::process
-    vix::print
 )
 
 add_executable(vix_process_check_status
@@ -45,7 +42,6 @@ add_executable(vix_process_check_status
 target_link_libraries(vix_process_check_status
   PRIVATE
     vix::process
-    vix::print
 )
 
 add_executable(vix_process_kill_process
@@ -55,7 +51,6 @@ add_executable(vix_process_kill_process
 target_link_libraries(vix_process_kill_process
   PRIVATE
     vix::process
-    vix::print
 )
 
 add_executable(vix_process_terminate_process
@@ -65,5 +60,4 @@ add_executable(vix_process_terminate_process
 target_link_libraries(vix_process_terminate_process
   PRIVATE
     vix::process
-    vix::print
 )

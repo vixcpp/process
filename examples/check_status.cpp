@@ -14,7 +14,8 @@
  *
  */
 
-#include <vix/print.hpp>
+#include <iostream>
+
 #include <vix/process/Process.hpp>
 
 int main()
@@ -25,17 +26,17 @@ int main()
   auto spawned = vix::process::spawn(command);
   if (!spawned)
   {
-    vix::eprint("spawn failed:", spawned.error().message());
+    std::cerr << "spawn failed: " << spawned.error().message() << '\n';
     return 1;
   }
 
   auto running = vix::process::status(spawned.value());
   if (!running)
   {
-    vix::eprint("status failed:", running.error().message());
+    std::cerr << "status failed: " << running.error().message() << '\n';
     return 1;
   }
 
-  vix::print("process running =", running.value());
+  std::cout << "process running = " << (running.value() ? "true" : "false") << '\n';
   return 0;
 }

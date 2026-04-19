@@ -14,7 +14,8 @@
  *
  */
 
-#include <vix/print.hpp>
+#include <iostream>
+
 #include <vix/process/Process.hpp>
 
 int main()
@@ -27,12 +28,12 @@ int main()
   auto result = vix::process::output(command);
   if (!result)
   {
-    vix::eprint("output failed:", result.error().message());
+    std::cerr << "output failed: " << result.error().message() << '\n';
     return 1;
   }
 
-  vix::print("exit code =", result.value().exit_code);
-  vix::print("stdout =", result.value().stdout_text);
-  vix::print("stderr =", result.value().stderr_text);
+  std::cout << "exit code = " << result.value().exit_code << '\n';
+  std::cout << "stdout = " << result.value().stdout_text << '\n';
+  std::cout << "stderr = " << result.value().stderr_text << '\n';
   return 0;
 }

@@ -78,6 +78,7 @@ file(GLOB_RECURSE PROCESS_SOURCES CONFIGURE_DEPENDS
 option(VIX_PROCESS_FETCH_ERROR "Auto-fetch vix::error if missing" ON)
 option(VIX_PROCESS_FETCH_ENV   "Auto-fetch vix::env if missing" ON)
 option(VIX_PROCESS_FETCH_PATH  "Auto-fetch vix::path if missing" ON)
+option(VIX_PROCESS_FETCH_TESTS "Auto-fetch vix::tests if missing" ON)
 
 # error
 if (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
@@ -310,6 +311,42 @@ if (NOT (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD))
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vix_process"
   )
 
+endif()
+
+# --------------------------------------------------------------------
+# Tests dependency (vix::tests)
+# --------------------------------------------------------------------
+option(VIX_PROCESS_FETCH_TESTS "Auto-fetch vix::tests if missing" ON)
+
+if (VIX_PROCESS_BUILD_TESTS)
+  if (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
+    if (NOT TARGET vix::tests)
+      message(FATAL_ERROR "[process] Umbrella build: vix::tests must be provided before process tests.")
+    endif()
+  else()
+    if (NOT TARGET vix::tests)
+      if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../tests/CMakeLists.txt")
+        message(STATUS "[process] Adding tests from sibling: ../tests")
+        add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../tests" "tests")
+      else()
+        find_package(vix_tests CONFIG QUIET)
+      endif()
+
+      if (NOT TARGET vix::tests)
+        if (VIX_PROCESS_FETCH_TESTS)
+          include(FetchContent)
+          message(STATUS "[process] Fetching vix::tests via FetchContent")
+          FetchContent_Declare(vix_tests
+            GIT_REPOSITORY https://github.com/vixcpp/tests.git
+            GIT_TAG        v0.1.0
+          )
+          FetchContent_MakeAvailable(vix_tests)
+        else()
+          message(FATAL_ERROR "vix::tests not found.")
+        endif()
+      endif()
+    endif()
+  endif()
 endif()
 
 # --------------------------------------------------------------------
