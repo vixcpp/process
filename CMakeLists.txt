@@ -226,6 +226,7 @@ if (PROCESS_SOURCES)
       ${VIX_ERROR_TARGET}
       ${VIX_ENV_TARGET}
       ${VIX_PATH_TARGET}
+      ${VIX_ASYNC_TARGET}
   )
 
   if (WIN32)
