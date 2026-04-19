@@ -66,6 +66,7 @@ namespace vix::process::platform
       return message;
     }
 
+#if !defined(__linux__)
     bool set_cloexec(int fd)
     {
       const int flags = ::fcntl(fd, F_GETFD);
@@ -76,6 +77,7 @@ namespace vix::process::platform
 
       return ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
     }
+#endif
 
     bool make_pipe(int fds[2])
     {
@@ -275,7 +277,10 @@ namespace vix::process::platform
       }
     };
 
-    bool prepare_stdio(const Command &command, FdSet &fds, vix::error::Error &error)
+    [[maybe_unused]] bool prepare_stdio(
+        const Command &command,
+        FdSet &fds,
+        vix::error::Error &error)
     {
       const auto stdin_mode = command.options().stdin_mode;
       const auto stdout_mode = command.options().stdout_mode;
