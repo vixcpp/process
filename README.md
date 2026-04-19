@@ -2,8 +2,6 @@
 
 Process management module for Vix.cpp.
 
----
-
 ## Overview
 
 `vix::process` provides a simple and explicit API to spawn, control, and interact with system processes.
@@ -17,8 +15,6 @@ It is designed to:
 - Terminate or kill processes
 - Provide a portable abstraction across POSIX and Windows
 
----
-
 ## Philosophy
 
 - No hidden shell behavior
@@ -27,8 +23,6 @@ It is designed to:
 - Strong error handling via `vix::error`
 - Portable by design
 - Built for real-world systems
-
----
 
 ## Basic Usage
 
@@ -51,8 +45,6 @@ int main()
 }
 ```
 
----
-
 ## Command API
 
 ```cpp
@@ -72,8 +64,6 @@ cmd.detach(false);
 cmd.search_in_path(true);
 ```
 
----
-
 ## Waiting for a Process
 
 ```cpp
@@ -81,8 +71,6 @@ auto child = vix::process::spawn(cmd);
 
 auto result = vix::process::wait(child.value());
 ```
-
----
 
 ## Capturing Output
 
@@ -94,8 +82,6 @@ auto result = vix::process::output(cmd);
 auto text = result.value().stdout_text;
 ```
 
----
-
 ## Process Control
 
 ```cpp
@@ -103,15 +89,11 @@ vix::process::kill(child);
 vix::process::terminate(child);
 ```
 
----
-
 ## Status Check
 
 ```cpp
 auto running = vix::process::status(child);
 ```
-
----
 
 ## Error Handling
 
@@ -123,8 +105,6 @@ if (!result)
   auto err = result.error();
 }
 ```
-
----
 
 ## Current State
 
@@ -139,8 +119,6 @@ Some operations may currently return:
 
 - `UnsupportedOperation`
 
----
-
 ## Examples
 
 ```text
@@ -153,8 +131,6 @@ examples/
 └── terminate_process.cpp
 ```
 
----
-
 ## Design Notes
 
 - `Command` is a builder object, not a shell string
@@ -162,8 +138,6 @@ examples/
 - Environment is explicit and controlled
 - Pipes are opt-in via `PipeMode`
 - Errors are structured, not exceptions by default
-
----
 
 ## Roadmap
 
@@ -173,8 +147,6 @@ examples/
 - Stream-based I/O for pipes
 - Process groups and signals
 - Timeout and cancellation support
-
----
 
 ## License
 
