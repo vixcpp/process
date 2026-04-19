@@ -79,6 +79,7 @@ option(VIX_PROCESS_FETCH_ERROR "Auto-fetch vix::error if missing" ON)
 option(VIX_PROCESS_FETCH_ENV   "Auto-fetch vix::env if missing" ON)
 option(VIX_PROCESS_FETCH_PATH  "Auto-fetch vix::path if missing" ON)
 option(VIX_PROCESS_FETCH_TESTS "Auto-fetch vix::tests if missing" ON)
+option(VIX_PROCESS_FETCH_ASYNC "Auto-fetch vix::async if missing" ON)
 
 # error
 if (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
@@ -176,9 +177,32 @@ else()
   endif()
 endif()
 
+# async
+if (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
+  if (NOT TARGET vix::async)
+    message(FATAL_ERROR "[process] Umbrella build: vix::async must be provided by umbrella before process.")
+  endif()
+else()
+  if (NOT TARGET vix::async)
+    if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/../async/CMakeLists.txt")
+      message(STATUS "[process] Adding async from sibling: ../async")
+      add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../async" "async")
+    else()
+      find_package(async CONFIG QUIET)
+    endif()
+
+    if (NOT TARGET vix::async)
+      message(FATAL_ERROR
+        "vix::async not found. Install async, provide the target before process, or add sibling module."
+      )
+    endif()
+  endif()
+endif()
+
 set(VIX_ERROR_TARGET vix::error)
 set(VIX_ENV_TARGET   vix::env)
 set(VIX_PATH_TARGET  vix::path)
+set(VIX_ASYNC_TARGET vix::async)
 
 # --------------------------------------------------------------------
 # Library target
@@ -257,10 +281,12 @@ else()
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
 
-  target_link_libraries(vix_process INTERFACE
-    ${VIX_ERROR_TARGET}
-    ${VIX_ENV_TARGET}
-    ${VIX_PATH_TARGET}
+  target_link_libraries(vix_process
+    PUBLIC
+      ${VIX_ERROR_TARGET}
+      ${VIX_ENV_TARGET}
+      ${VIX_PATH_TARGET}
+      ${VIX_ASYNC_TARGET}
   )
 
   install(TARGETS vix_process

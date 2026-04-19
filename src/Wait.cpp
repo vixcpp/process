@@ -25,7 +25,6 @@
 
 namespace vix::process
 {
-
   ProcessExitCodeResult wait(const Child &child)
   {
     if (!child.valid())

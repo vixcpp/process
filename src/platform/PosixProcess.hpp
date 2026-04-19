@@ -22,6 +22,7 @@
 
 #include <vix/error/Error.hpp>
 #include <vix/process/ProcessResult.hpp>
+#include <vix/process/pipeline/Pipeline.hpp>
 
 namespace vix::process
 {
@@ -97,6 +98,10 @@ namespace vix::process::platform
    * @brief Wait for a POSIX child process and return its exit code.
    */
   [[nodiscard]] ProcessExitCodeResult wait_posix(const Child &child);
+
+  [[nodiscard]] vix::error::Result<vix::process::pipeline::PipelineChildren> spawn_pipeline_posix(
+      const Command &first,
+      const Command &second);
 
   /**
    * @brief Run a POSIX command to completion and capture output.

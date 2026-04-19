@@ -25,7 +25,6 @@
 
 namespace vix::process
 {
-
   vix::error::Error terminate(const Child &child)
   {
     if (!child.valid())

@@ -36,7 +36,7 @@ namespace vix::process
    * @param command Process launch description.
    * @return SpawnResult containing a Child handle on success.
    */
-  [[nodiscard]] SpawnResult spawn(const Command &command);
+  [[nodiscard]] SpawnResult spawn(Command command);
 
 } // namespace vix::process
 

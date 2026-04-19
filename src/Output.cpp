@@ -25,8 +25,7 @@
 
 namespace vix::process
 {
-
-  ProcessOutputResult output(const Command &command)
+  ProcessOutputResult output(Command command)
   {
     if (!command.valid())
     {

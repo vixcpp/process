@@ -29,5 +29,10 @@
 #include <vix/process/Wait.hpp>
 #include <vix/process/Kill.hpp>
 #include <vix/process/Terminate.hpp>
+#include <vix/process/async/SpawnAsync.hpp>
+#include <vix/process/async/OutputAsync.hpp>
+#include <vix/process/async/WaitAsync.hpp>
+#include <vix/process/pipeline/Pipeline.hpp>
+#include <vix/process/pipeline/PipelineAsync.hpp>
 
 #endif // VIX_PROCESS_PROCESS_HPP

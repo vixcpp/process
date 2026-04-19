@@ -1,6 +1,6 @@
 /**
  *
- *  @file Status.cpp
+ *  @file Spawn.cpp
  *  @author Gaspard Kirira
  *
  *  Copyright 2026, Gaspard Kirira.
@@ -14,7 +14,9 @@
  *
  */
 
-#include <vix/process/Status.hpp>
+#include <utility>
+
+#include <vix/process/Spawn.hpp>
 #include <vix/process/ProcessError.hpp>
 
 #ifndef _WIN32
@@ -25,20 +27,19 @@
 
 namespace vix::process
 {
-
-  ProcessRunningResult status(const Child &child)
+  SpawnResult spawn(Command command)
   {
-    if (!child.valid())
+    if (!command.valid())
     {
       return make_process_error(
-          ProcessErrorCode::InvalidArgument,
-          "child process handle is invalid");
+          ProcessErrorCode::EmptyProgram,
+          "process program cannot be empty");
     }
 
 #ifndef _WIN32
-    return platform::status_posix(child);
+    return platform::spawn_posix(command);
 #else
-    return platform::status_windows(child);
+    return platform::spawn_windows(command);
 #endif
   }
 

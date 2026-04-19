@@ -40,7 +40,7 @@ namespace vix::process
    * @param command Process launch description.
    * @return ProcessOutputResult containing exit code and captured output.
    */
-  [[nodiscard]] ProcessOutputResult output(const Command &command);
+  [[nodiscard]] ProcessOutputResult output(Command command);
 
 } // namespace vix::process
 

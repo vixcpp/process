@@ -5,6 +5,7 @@ include(CMakeFindDependencyMacro)
 find_dependency(vix_error CONFIG REQUIRED)
 find_dependency(vix_env CONFIG REQUIRED)
 find_dependency(vix_path CONFIG REQUIRED)
+find_dependency(async CONFIG REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/vix_processTargets.cmake")
 
