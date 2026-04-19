@@ -23,6 +23,8 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <cstdlib>
+#include <optional>
 
 #include <fcntl.h>
 #include <signal.h>
@@ -135,6 +137,129 @@ namespace vix::process::platform
       }
 
       return true;
+    }
+
+    void child_fail_and_exit(int error_fd, int err) noexcept
+    {
+      (void)write_full(error_fd, &err, sizeof(err));
+      _exit(127);
+    }
+
+    std::optional<std::string> get_env_value(
+        const std::vector<std::string> &env_storage,
+        std::string_view key)
+    {
+      const std::string prefix = std::string(key) + "=";
+
+      for (const auto &entry : env_storage)
+      {
+        if (entry.compare(0, prefix.size(), prefix) == 0)
+        {
+          return entry.substr(prefix.size());
+        }
+      }
+
+      return std::nullopt;
+    }
+
+    bool contains_slash(std::string_view value) noexcept
+    {
+      return value.find('/') != std::string_view::npos;
+    }
+
+    std::vector<std::string> split_path_list(std::string_view path_value)
+    {
+      std::vector<std::string> parts;
+      std::size_t start = 0;
+
+      while (start <= path_value.size())
+      {
+        const std::size_t pos = path_value.find(':', start);
+
+        if (pos == std::string_view::npos)
+        {
+          parts.emplace_back(path_value.substr(start));
+          break;
+        }
+
+        parts.emplace_back(path_value.substr(start, pos - start));
+        start = pos + 1;
+      }
+
+      return parts;
+    }
+
+    [[nodiscard]] std::string join_path(
+        std::string_view dir,
+        std::string_view file)
+    {
+      if (dir.empty())
+      {
+        return std::string(file);
+      }
+
+      std::string out;
+      out.reserve(dir.size() + 1 + file.size());
+      out.append(dir);
+      if (!out.empty() && out.back() != '/')
+      {
+        out.push_back('/');
+      }
+      out.append(file);
+      return out;
+    }
+
+    [[noreturn]] void exec_with_path_search_or_exit(
+        const Command &command,
+        std::vector<char *> &argv,
+        std::vector<char *> &envp,
+        const std::vector<std::string> &env_storage,
+        int error_fd)
+    {
+#if defined(__linux__)
+      ::execvpe(command.program().c_str(), argv.data(), envp.data());
+      child_fail_and_exit(error_fd, errno);
+#else
+      if (contains_slash(command.program()))
+      {
+        ::execve(command.program().c_str(), argv.data(), envp.data());
+        child_fail_and_exit(error_fd, errno);
+      }
+
+      std::string path_value;
+
+      if (const auto path_from_env = get_env_value(env_storage, "PATH"))
+      {
+        path_value = *path_from_env;
+      }
+      else if (const char *sys_path = std::getenv("PATH"))
+      {
+        path_value = sys_path;
+      }
+      else
+      {
+        path_value = "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin";
+      }
+
+      const auto dirs = split_path_list(path_value);
+
+      int last_error = ENOENT;
+
+      for (const auto &dir : dirs)
+      {
+        const std::string candidate = join_path(dir, command.program());
+        ::execve(candidate.c_str(), argv.data(), envp.data());
+
+        const int err = errno;
+
+        if (err != ENOENT && err != ENOTDIR)
+        {
+          last_error = err;
+        }
+      }
+
+      child_fail_and_exit(error_fd, last_error);
+#endif
     }
 
     std::string read_fd_to_string(int fd, std::size_t chunk_size = 4096)
@@ -361,12 +486,6 @@ namespace vix::process::platform
       }
 
       return true;
-    }
-
-    void child_fail_and_exit(int error_fd, int err) noexcept
-    {
-      (void)write_full(error_fd, &err, sizeof(err));
-      _exit(127);
     }
 
     void apply_child_stdio_or_exit(
@@ -628,11 +747,17 @@ namespace vix::process::platform
 
         if (command.options().search_in_path)
         {
-          ::execvpe(command.program().c_str(), argv.data(), envp.data());
+          exec_with_path_search_or_exit(
+              command,
+              argv,
+              envp,
+              env_storage,
+              fds.exec_error_pipe[1]);
         }
         else
         {
           ::execve(command.program().c_str(), argv.data(), envp.data());
+          child_fail_and_exit(fds.exec_error_pipe[1], errno);
         }
 
         child_fail_and_exit(fds.exec_error_pipe[1], errno);
