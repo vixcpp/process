@@ -139,12 +139,12 @@ namespace vix::process::platform
       return true;
     }
 
-    void child_fail_and_exit(int error_fd, int err) noexcept
+    [[noreturn]] void child_fail_and_exit(int error_fd, int err) noexcept
     {
       (void)write_full(error_fd, &err, sizeof(err));
       _exit(127);
     }
-
+#if !defined(__linux__)
     std::optional<std::string> get_env_value(
         const std::vector<std::string> &env_storage,
         std::string_view key)
@@ -208,12 +208,16 @@ namespace vix::process::platform
       out.append(file);
       return out;
     }
-
+#endif
     [[noreturn]] void exec_with_path_search_or_exit(
         const Command &command,
         std::vector<char *> &argv,
         std::vector<char *> &envp,
+#if defined(__linux__)
+        [[maybe_unused]] const std::vector<std::string> &env_storage,
+#else
         const std::vector<std::string> &env_storage,
+#endif
         int error_fd)
     {
 #if defined(__linux__)
