@@ -1,3 +1,18 @@
+function(vix_process_enable_sanitizers target)
+  if (VIX_ENABLE_SANITIZERS AND NOT MSVC)
+    target_compile_options(${target}
+      PRIVATE
+        -fno-omit-frame-pointer
+        -fsanitize=address,undefined
+    )
+
+    target_link_options(${target}
+      PRIVATE
+        -fsanitize=address,undefined
+    )
+  endif()
+endfunction()
+
 add_executable(vix_process_tests
   process_tests.cpp
 )
@@ -7,6 +22,8 @@ target_link_libraries(vix_process_tests
     vix::process
     vix::tests
 )
+
+vix_process_enable_sanitizers(vix_process_tests)
 
 add_test(NAME vix_process_tests COMMAND vix_process_tests)
 
@@ -25,5 +42,7 @@ target_link_libraries(vix_process_async_tests
     vix::async
     vix::tests
 )
+
+vix_process_enable_sanitizers(vix_process_async_tests)
 
 add_test(NAME vix_process_async_tests COMMAND vix_process_async_tests)
