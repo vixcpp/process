@@ -763,8 +763,6 @@ namespace vix::process::platform
           ::execve(command.program().c_str(), argv.data(), envp.data());
           child_fail_and_exit(fds.exec_error_pipe[1], errno);
         }
-
-        child_fail_and_exit(fds.exec_error_pipe[1], errno);
       }
 
       close_if_valid(fds.exec_error_pipe[1]);
