@@ -8,6 +8,7 @@
  */
 
 #include <chrono>
+#include <exception>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -28,19 +29,71 @@ using namespace vix::tests;
 namespace
 {
   template <typename Fn>
+  vix::async::core::task<void> run_async_test_body(
+      vix::async::core::io_context &ctx,
+      Fn fn,
+      std::exception_ptr &failure)
+  {
+    try
+    {
+      co_await std::move(fn)(ctx);
+    }
+    catch (...)
+    {
+      failure = std::current_exception();
+    }
+
+    ctx.stop();
+    co_return;
+  }
+
+  template <typename Fn>
   void run_async_test(Fn &&fn)
   {
     vix::async::core::io_context ctx;
-    std::move(fn)(ctx).start(ctx.get_scheduler());
+    std::exception_ptr failure;
+
+    run_async_test_body(
+        ctx,
+        std::forward<Fn>(fn),
+        failure)
+        .start(ctx.get_scheduler());
+
     ctx.run();
+
+    if (failure)
+    {
+      std::rethrow_exception(failure);
+    }
   }
 
-  vix::async::core::task<void> stop_later(
-      vix::async::core::io_context &ctx,
-      std::chrono::milliseconds delay)
+  vix::process::Command make_exit_command(int code)
   {
-    co_await ctx.timers().sleep_for(delay);
-    ctx.stop();
+#ifndef _WIN32
+    vix::process::Command cmd("sh");
+    cmd.arg("-c");
+    cmd.arg("exit " + std::to_string(code));
+    return cmd;
+#else
+    vix::process::Command cmd("cmd");
+    cmd.arg("/C");
+    cmd.arg("exit " + std::to_string(code));
+    return cmd;
+#endif
+  }
+
+  vix::process::Command make_long_running_command()
+  {
+#ifndef _WIN32
+    vix::process::Command cmd("sleep");
+    cmd.arg("5");
+    return cmd;
+#else
+    vix::process::Command cmd("cmd");
+    cmd.arg("/C");
+    cmd.arg("ping 127.0.0.1 -n 6 > NUL");
+    return cmd;
+#endif
   }
 } // namespace
 
@@ -158,6 +211,58 @@ int main()
                                 co_return;
                               }); }));
 
+  registry.add(TestCase("async output: nonzero exit code should be returned", []
+                        { run_async_test(
+                              [](vix::async::core::io_context &ctx) -> vix::async::core::task<void>
+                              {
+                                auto result =
+                                    co_await vix::process::async::output(ctx, make_exit_command(7));
+
+                                Assert::equal(result.exit_code, 7);
+
+                                ctx.stop();
+                                co_return;
+                              }); }));
+
+  registry.add(TestCase("async wait: already-cancelled token should resume and fail", []
+                        { run_async_test(
+                              [](vix::async::core::io_context &ctx) -> vix::async::core::task<void>
+                              {
+                                vix::async::core::cancel_source cancel;
+                                cancel.request_cancel();
+
+                                auto child =
+                                    co_await vix::process::async::spawn(
+                                        ctx,
+                                        make_long_running_command());
+
+                                bool cancelled = false;
+
+                                try
+                                {
+                                  (void)co_await vix::process::async::wait(
+                                      ctx,
+                                      child,
+                                      cancel.token(),
+                                      std::chrono::milliseconds(20));
+                                }
+                                catch (const std::system_error &)
+                                {
+                                  cancelled = true;
+                                }
+                                catch (...)
+                                {
+                                }
+
+                                Assert::is_true(cancelled);
+
+                                (void)vix::process::kill(child);
+                                (void)vix::process::wait(child);
+
+                                ctx.stop();
+                                co_return;
+                              }); }));
+
 #ifndef _WIN32
   registry.add(TestCase("async output: echo should capture stdout", []
                         { run_async_test(
@@ -226,11 +331,10 @@ int main()
                               {
                                 vix::async::core::cancel_source cancel;
 
-                                vix::process::Command cmd("sleep");
-                                cmd.arg("5");
-
                                 auto child =
-                                    co_await vix::process::async::spawn(ctx, std::move(cmd));
+                                    co_await vix::process::async::spawn(
+                                        ctx,
+                                        make_long_running_command());
 
                                 ctx.timers().after(
                                     std::chrono::milliseconds(100),
@@ -337,13 +441,10 @@ int main()
                               {
                                 vix::async::core::cancel_source cancel;
 
-                                vix::process::Command cmd("ping");
-                                cmd.arg("127.0.0.1");
-                                cmd.arg("-n");
-                                cmd.arg("6");
-
                                 auto child =
-                                    co_await vix::process::async::spawn(ctx, std::move(cmd));
+                                    co_await vix::process::async::spawn(
+                                        ctx,
+                                        make_long_running_command());
 
                                 ctx.timers().after(
                                     std::chrono::milliseconds(100),

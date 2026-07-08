@@ -8,6 +8,7 @@
  */
 
 #include <string>
+#include <utility>
 
 #include <vix/tests/tests.hpp>
 
@@ -24,6 +25,35 @@
 
 using namespace vix::tests;
 using namespace vix::process;
+
+namespace
+{
+  Command make_success_command()
+  {
+#ifndef _WIN32
+    return Command("true");
+#else
+    Command cmd("cmd");
+    cmd.arg("/C");
+    cmd.arg("exit 0");
+    return cmd;
+#endif
+  }
+
+  Command make_long_running_command()
+  {
+#ifndef _WIN32
+    Command cmd("sleep");
+    cmd.arg("5");
+    return cmd;
+#else
+    Command cmd("cmd");
+    cmd.arg("/C");
+    cmd.arg("ping 127.0.0.1 -n 6 > NUL");
+    return cmd;
+#endif
+  }
+}
 
 int main()
 {
@@ -127,6 +157,47 @@ int main()
                           auto err = terminate(child);
 
                           Assert::is_true(err.has_error()); }));
+
+  registry.add(TestCase("spawn/wait: null stdio command should exit", []
+                        {
+                          Command cmd = make_success_command();
+                          cmd.stdin_mode(PipeMode::Null);
+                          cmd.stdout_mode(PipeMode::Null);
+                          cmd.stderr_mode(PipeMode::Null);
+
+                          auto spawned = spawn(cmd);
+
+                          Assert::is_true(static_cast<bool>(spawned));
+
+                          auto waited = wait(spawned.value());
+
+                          Assert::is_true(static_cast<bool>(waited));
+                          Assert::equal(waited.value(), 0); }));
+
+  registry.add(TestCase("kill: running child should become not running", []
+                        {
+                          Command cmd = make_long_running_command();
+                          cmd.stdin_mode(PipeMode::Null);
+                          cmd.stdout_mode(PipeMode::Null);
+                          cmd.stderr_mode(PipeMode::Null);
+
+                          auto spawned = spawn(cmd);
+
+                          Assert::is_true(static_cast<bool>(spawned));
+
+                          auto before = status(spawned.value());
+                          Assert::is_true(static_cast<bool>(before));
+                          Assert::is_true(before.value());
+
+                          auto killed = kill(spawned.value());
+                          Assert::is_true(!killed.has_error());
+
+                          auto waited = wait(spawned.value());
+                          Assert::is_true(static_cast<bool>(waited));
+
+                          auto after = status(spawned.value());
+                          Assert::is_true(static_cast<bool>(after));
+                          Assert::is_true(!after.value()); }));
 
   registry.add(TestCase("pipeline spawn: empty first command should fail", []
                         {
