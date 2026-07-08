@@ -204,6 +204,29 @@ set(VIX_ENV_TARGET   vix::env)
 set(VIX_PATH_TARGET  vix::path)
 set(VIX_ASYNC_TARGET vix::async)
 
+# Installed vix::async packages expose public headers that include standalone Asio.
+# Some package exports do not carry the Asio include directory, so process
+# supplies it for build-tree tests and examples that include async headers.
+find_path(VIX_PROCESS_ASIO_INCLUDE_DIR
+  NAMES asio/io_context.hpp asio.hpp
+  HINTS
+    "${CMAKE_CURRENT_LIST_DIR}/async/third_party/asio/include"
+    "${CMAKE_CURRENT_LIST_DIR}/../async/third_party/asio/include"
+    "${CMAKE_INSTALL_PREFIX}/include"
+    "$ENV{ASIO_ROOT}/include"
+    "$ENV{ASIO_ROOT}"
+    /opt/homebrew/include
+    /usr/local/include
+    /usr/include
+  PATH_SUFFIXES include
+)
+
+if (VIX_PROCESS_ASIO_INCLUDE_DIR)
+  message(STATUS "[process] Asio: using headers at ${VIX_PROCESS_ASIO_INCLUDE_DIR}")
+else()
+  message(STATUS "[process] Asio: relying on vix::async usage requirements")
+endif()
+
 # --------------------------------------------------------------------
 # Library target
 # --------------------------------------------------------------------
@@ -220,6 +243,12 @@ if (PROCESS_SOURCES)
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
+
+  if (VIX_PROCESS_ASIO_INCLUDE_DIR)
+    target_include_directories(vix_process SYSTEM PUBLIC
+      $<BUILD_INTERFACE:${VIX_PROCESS_ASIO_INCLUDE_DIR}>
+    )
+  endif()
 
   target_link_libraries(vix_process
     PUBLIC
@@ -281,6 +310,12 @@ else()
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
+
+  if (VIX_PROCESS_ASIO_INCLUDE_DIR)
+    target_include_directories(vix_process SYSTEM INTERFACE
+      $<BUILD_INTERFACE:${VIX_PROCESS_ASIO_INCLUDE_DIR}>
+    )
+  endif()
 
   target_link_libraries(vix_process
     PUBLIC
