@@ -249,8 +249,8 @@ if (PROCESS_SOURCES)
       -fno-omit-frame-pointer
       -fsanitize=address,undefined
     )
-    target_link_options(vix_process PRIVATE
-      -fsanitize=address,undefined
+    target_link_options(vix_process PUBLIC
+      $<BUILD_INTERFACE:-fsanitize=address,undefined>
     )
   endif()
 
