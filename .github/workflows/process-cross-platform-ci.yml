@@ -1,0 +1,469 @@
+name: Process Cross Platform CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/process-cross-platform-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "examples/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/process-cross-platform-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "examples/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILD_JOBS: 2
+  VIX_GIT_BRANCH: dev
+
+jobs:
+  build-test-package:
+    name: build test package (${{ matrix.os }} / ${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            build_type: Debug
+
+          - os: ubuntu-24.04
+            build_type: Release
+
+          - os: macos-14
+            build_type: Debug
+
+          - os: macos-15-intel
+            build_type: Release
+
+          - os: windows-2022
+            build_type: Debug
+
+          - os: windows-2022
+            build_type: Release
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout error dependency
+        uses: actions/checkout@v4
+        with:
+          repository: vixcpp/error
+          ref: ${{ env.VIX_GIT_BRANCH }}
+          path: error
+          fetch-depth: 0
+
+      - name: Checkout path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: vixcpp/path
+          ref: ${{ env.VIX_GIT_BRANCH }}
+          path: path
+          fetch-depth: 0
+
+      - name: Checkout env dependency
+        uses: actions/checkout@v4
+        with:
+          repository: vixcpp/env
+          ref: ${{ env.VIX_GIT_BRANCH }}
+          path: env
+          fetch-depth: 0
+
+      - name: Checkout async dependency
+        uses: actions/checkout@v4
+        with:
+          repository: vixcpp/async
+          ref: ${{ env.VIX_GIT_BRANCH }}
+          path: async
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout tests dependency
+        uses: actions/checkout@v4
+        with:
+          repository: vixcpp/tests
+          ref: ${{ env.VIX_GIT_BRANCH }}
+          path: tests
+          fetch-depth: 0
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ninja-build \
+            pkg-config \
+            git \
+            libasio-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          brew update
+          brew install ninja asio || true
+
+      - name: Configure and build error (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S error -B error/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DVIX_ERROR_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build error/build --parallel ${BUILD_JOBS}
+          cmake --install error/build
+
+      - name: Configure and build error (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S error -B error/build `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" `
+            -DVIX_ERROR_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build error/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --install error/build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure and build path (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S path -B path/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DVIX_PATH_BUILD_TESTS=OFF \
+            -DVIX_PATH_FETCH_ERROR=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build path/build --parallel ${BUILD_JOBS}
+          cmake --install path/build
+
+      - name: Configure and build path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S path -B path/build `
+            -DVIX_PATH_BUILD_TESTS=OFF `
+            -DVIX_PATH_FETCH_ERROR=OFF `
+            -DCMAKE_PREFIX_PATH="$PWD/stage" `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build path/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --install path/build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure and build env (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S env -B env/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DVIX_ENV_BUILD_TESTS=OFF \
+            -DVIX_ENV_FETCH_ERROR=OFF \
+            -DVIX_ENV_FETCH_PATH=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build env/build --parallel ${BUILD_JOBS}
+          cmake --install env/build
+
+      - name: Configure and build env (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S env -B env/build `
+            -DVIX_ENV_BUILD_TESTS=OFF `
+            -DVIX_ENV_FETCH_ERROR=OFF `
+            -DVIX_ENV_FETCH_PATH=OFF `
+            -DCMAKE_PREFIX_PATH="$PWD/stage" `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build env/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --install env/build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure and build async (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S async -B async/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DASYNC_BUILD_TESTS=OFF \
+            -DASYNC_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build async/build --parallel ${BUILD_JOBS}
+          cmake --install async/build
+
+      - name: Configure and build async (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S async -B async/build `
+            -DASYNC_BUILD_TESTS=OFF `
+            -DASYNC_BUILD_EXAMPLES=OFF `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build async/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --install async/build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure and build tests (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S tests -B tests/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DVIX_TESTS_BUILD_TESTS=OFF \
+            -DVIX_TESTS_ENABLE_CTEST=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build tests/build --parallel ${BUILD_JOBS}
+          cmake --install tests/build
+
+      - name: Configure and build tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S tests -B tests/build `
+            -DVIX_TESTS_BUILD_TESTS=OFF `
+            -DVIX_TESTS_ENABLE_CTEST=OFF `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build tests/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --install tests/build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Configure process (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DVIX_PROCESS_BUILD_TESTS=ON \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF \
+            -DVIX_PROCESS_FETCH_TESTS=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+
+      - name: Configure process (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -DVIX_PROCESS_BUILD_TESTS=ON `
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF `
+            -DVIX_PROCESS_FETCH_ERROR=OFF `
+            -DVIX_PROCESS_FETCH_ENV=OFF `
+            -DVIX_PROCESS_FETCH_PATH=OFF `
+            -DVIX_PROCESS_FETCH_ASYNC=OFF `
+            -DVIX_PROCESS_FETCH_TESTS=OFF `
+            -DCMAKE_PREFIX_PATH="$PWD/stage" `
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build process (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build build --parallel ${BUILD_JOBS}
+
+      - name: Build process (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --build build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run tests (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ctest --test-dir build --output-on-failure
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install process (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --install build
+
+      - name: Install process (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --install build --config ${{ matrix.build_type }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package smoke test (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          mkdir -p smoke
+          cat > smoke/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.20)
+          project(process_smoke LANGUAGES CXX)
+
+          set(CMAKE_CXX_STANDARD 20)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+          find_package(vix_process CONFIG REQUIRED)
+
+          add_executable(process_smoke main.cpp)
+          target_link_libraries(process_smoke PRIVATE vix::process)
+          EOF
+
+          cat > smoke/main.cpp <<'EOF'
+          #include <iostream>
+
+          int main()
+          {
+            std::cout << "vix::process package found\n";
+            return 0;
+          }
+          EOF
+
+          cmake -S smoke -B smoke/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_PREFIX_PATH="$PWD/stage"
+          cmake --build smoke/build --parallel ${BUILD_JOBS}
+
+      - name: Package smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path smoke | Out-Null
+
+          @"
+          cmake_minimum_required(VERSION 3.20)
+          project(process_smoke LANGUAGES CXX)
+
+          set(CMAKE_CXX_STANDARD 20)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+          find_package(vix_process CONFIG REQUIRED)
+
+          add_executable(process_smoke main.cpp)
+          target_link_libraries(process_smoke PRIVATE vix::process)
+          "@ | Out-File -FilePath smoke/CMakeLists.txt -Encoding utf8
+
+          @"
+          #include <iostream>
+
+          int main()
+          {
+            std::cout << "vix::process package found\n";
+            return 0;
+          }
+          "@ | Out-File -FilePath smoke/main.cpp -Encoding utf8
+
+          cmake -S smoke -B smoke/build `
+            -DCMAKE_PREFIX_PATH="$PWD/stage"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          cmake --build smoke/build --config ${{ matrix.build_type }} --parallel $env:BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Collect logs
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p logs
+
+          cp -f build/CMakeCache.txt logs/ 2>/dev/null || true
+          cp -f build/CMakeFiles/CMakeOutput.log logs/ 2>/dev/null || true
+          cp -f build/CMakeFiles/CMakeError.log logs/ 2>/dev/null || true
+          cp -f build/CMakeFiles/CMakeConfigureLog.yaml logs/ 2>/dev/null || true
+
+          cp -f error/build/CMakeCache.txt logs/error_CMakeCache.txt 2>/dev/null || true
+          cp -f path/build/CMakeCache.txt logs/path_CMakeCache.txt 2>/dev/null || true
+          cp -f env/build/CMakeCache.txt logs/env_CMakeCache.txt 2>/dev/null || true
+          cp -f async/build/CMakeCache.txt logs/async_CMakeCache.txt 2>/dev/null || true
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: process-logs-${{ matrix.os }}-${{ matrix.build_type }}
+          path: logs/*
+          if-no-files-found: warn
+
+  summary:
+    name: Process Cross Platform CI Summary
+    needs: [build-test-package]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Print summary
+        shell: bash
+        run: |
+          echo "Process cross-platform CI completed."
+          echo "- Linux build and test"
+          echo "- macOS build and test"
+          echo "- Windows build and test"
+          echo "- install verification"
+          echo "- find_package(vix_process) smoke test"

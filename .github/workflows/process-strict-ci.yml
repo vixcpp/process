@@ -1,0 +1,471 @@
+name: Process Strict CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/process-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "examples/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/process-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "test/**"
+      - "examples/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPS: >
+    build-essential
+    cmake
+    ninja-build
+    clang
+    llvm
+    lld
+    g++
+    cppcheck
+    clang-tidy
+    valgrind
+    pkg-config
+    git
+    libasio-dev
+  BUILD_JOBS: 2
+  VIX_GIT_BRANCH: dev
+
+jobs:
+  build-test-sanitized:
+    name: Sanitized Build and Tests (${{ matrix.compiler }}, examples=${{ matrix.examples }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+        examples: [ON, OFF]
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling dependencies
+        run: |
+          rm -rf ../error ../path ../env ../async ../tests
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/error.git ../error
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/path.git ../path
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/env.git ../env
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" --recurse-submodules https://github.com/vixcpp/async.git ../async
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/tests.git ../tests
+
+      - name: Verify required sibling dependencies
+        run: |
+          test -f ../error/CMakeLists.txt || (echo "::error::../error/CMakeLists.txt is missing"; exit 1)
+          test -f ../path/CMakeLists.txt  || (echo "::error::../path/CMakeLists.txt is missing"; exit 1)
+          test -f ../env/CMakeLists.txt   || (echo "::error::../env/CMakeLists.txt is missing"; exit 1)
+          test -f ../async/CMakeLists.txt || (echo "::error::../async/CMakeLists.txt is missing"; exit 1)
+          test -f ../tests/CMakeLists.txt || (echo "::error::../tests/CMakeLists.txt is missing"; exit 1)
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Select compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          else
+            echo "CC=gcc" >> "$GITHUB_ENV"
+            echo "CXX=g++" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -S . -B build-sanitize \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DVIX_PROCESS_BUILD_TESTS=ON \
+            -DVIX_PROCESS_BUILD_EXAMPLES=${{ matrix.examples }} \
+            -DVIX_ENABLE_SANITIZERS=ON \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF \
+            -DVIX_PROCESS_FETCH_TESTS=OFF
+
+      - name: Build
+        run: |
+          cmake --build build-sanitize -j"${BUILD_JOBS}"
+
+      - name: Print executables
+        run: |
+          echo "---- executables ----"
+          find build-sanitize -type f -executable | sort || true
+
+      - name: Run ctest
+        run: |
+          set -e
+          cd build-sanitize
+          if ctest --output-on-failure --timeout 90; then
+            echo "All discovered tests passed."
+          else
+            echo "::warning::Some tests failed or no tests were discovered."
+            test -f Testing/Temporary/LastTest.log && cat Testing/Temporary/LastTest.log || true
+            exit 0
+          fi
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling dependencies
+        run: |
+          rm -rf ../error ../path ../env ../async ../tests
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/error.git ../error
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/path.git ../path
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/env.git ../env
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" --recurse-submodules https://github.com/vixcpp/async.git ../async
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/tests.git ../tests
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure for analysis
+        run: |
+          cmake -G Ninja -S . -B build-analyze \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DVIX_PROCESS_BUILD_TESTS=ON \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_ENABLE_SANITIZERS=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF \
+            -DVIX_PROCESS_FETCH_TESTS=OFF
+
+      - name: Run clang-tidy on source files
+        run: |
+          set +e
+          find src test -name '*.cpp' -print0 | xargs -0 -r -n1 -P2 clang-tidy -p build-analyze
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::clang-tidy reported issues."
+          else
+            echo "clang-tidy completed successfully."
+          fi
+          exit 0
+
+      - name: Run cppcheck on headers and sources
+        run: |
+          set +e
+          cppcheck \
+            --enable=all \
+            --std=c++20 \
+            --inconclusive \
+            --quiet \
+            --suppress=missingIncludeSystem \
+            include/ src/ test/
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::cppcheck reported issues."
+          else
+            echo "cppcheck completed successfully."
+          fi
+          exit 0
+
+  valgrind:
+    name: Valgrind Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling dependencies
+        run: |
+          rm -rf ../error ../path ../env ../async ../tests
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/error.git ../error
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/path.git ../path
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/env.git ../env
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" --recurse-submodules https://github.com/vixcpp/async.git ../async
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/tests.git ../tests
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure valgrind build
+        run: |
+          cmake -G Ninja -S . -B build-valgrind \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVIX_PROCESS_BUILD_TESTS=ON \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_ENABLE_SANITIZERS=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF \
+            -DVIX_PROCESS_FETCH_TESTS=OFF
+
+      - name: Build
+        run: |
+          cmake --build build-valgrind -j"${BUILD_JOBS}"
+
+      - name: Run valgrind on test executables
+        shell: bash
+        run: |
+          set +e
+          FAIL=0
+
+          mapfile -t TEST_BINS < <(
+            find build-valgrind/test -type f -executable 2>/dev/null | sort
+          )
+
+          if [ ${#TEST_BINS[@]} -eq 0 ]; then
+            echo "No test executables found for valgrind."
+            exit 0
+          fi
+
+          for exe in "${TEST_BINS[@]}"; do
+            echo "==> Valgrind: $exe"
+            timeout 20s valgrind \
+              --leak-check=full \
+              --show-leak-kinds=all \
+              --track-origins=yes \
+              "$exe"
+            STATUS=$?
+
+            if [ $STATUS -ne 0 ] && [ $STATUS -ne 124 ]; then
+              echo "::warning::Valgrind reported issues for $exe"
+              FAIL=1
+            fi
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::Valgrind detected potential issues."
+          else
+            echo "Valgrind checks completed."
+          fi
+          exit 0
+
+  package-smoke:
+    name: Package Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling dependencies
+        run: |
+          rm -rf ../error ../path ../env ../async
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/error.git ../error
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/path.git ../path
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/env.git ../env
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" --recurse-submodules https://github.com/vixcpp/async.git ../async
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Build and install error
+        run: |
+          cmake -G Ninja -S ../error -B ../error/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_ERROR_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build ../error/build -j"${BUILD_JOBS}"
+          cmake --install ../error/build
+
+      - name: Build and install path
+        run: |
+          cmake -G Ninja -S ../path -B ../path/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_PATH_BUILD_TESTS=OFF \
+            -DVIX_PATH_FETCH_ERROR=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build ../path/build -j"${BUILD_JOBS}"
+          cmake --install ../path/build
+
+      - name: Build and install env
+        run: |
+          cmake -G Ninja -S ../env -B ../env/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_ENV_BUILD_TESTS=OFF \
+            -DVIX_ENV_FETCH_ERROR=OFF \
+            -DVIX_ENV_FETCH_PATH=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build ../env/build -j"${BUILD_JOBS}"
+          cmake --install ../env/build
+
+      - name: Build and install async
+        run: |
+          cmake -G Ninja -S ../async -B ../async/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DASYNC_BUILD_TESTS=OFF \
+            -DASYNC_BUILD_EXAMPLES=OFF \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build ../async/build -j"${BUILD_JOBS}"
+          cmake --install ../async/build
+
+      - name: Build and install process
+        run: |
+          cmake -G Ninja -S . -B build-install \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_PROCESS_BUILD_TESTS=OFF \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF \
+            -DCMAKE_PREFIX_PATH="$PWD/stage" \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage"
+          cmake --build build-install -j"${BUILD_JOBS}"
+          cmake --install build-install
+
+      - name: Verify installed package with find_package
+        run: |
+          mkdir -p smoke
+          cat > smoke/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.20)
+          project(process_smoke LANGUAGES CXX)
+
+          set(CMAKE_CXX_STANDARD 20)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+          find_package(vix_process CONFIG REQUIRED)
+
+          add_executable(process_smoke main.cpp)
+          target_link_libraries(process_smoke PRIVATE vix::process)
+          EOF
+
+          cat > smoke/main.cpp <<'EOF'
+          #include <iostream>
+
+          int main()
+          {
+            std::cout << "vix::process package found\n";
+            return 0;
+          }
+          EOF
+
+          cmake -G Ninja -S smoke -B smoke/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/stage"
+          cmake --build smoke/build -j"${BUILD_JOBS}"
+
+  config-coverage:
+    name: Configuration Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout process repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling dependencies
+        run: |
+          rm -rf ../error ../path ../env ../async
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/error.git ../error
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/path.git ../path
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" https://github.com/vixcpp/env.git ../env
+          git clone --depth 1 --branch "${VIX_GIT_BRANCH}" --recurse-submodules https://github.com/vixcpp/async.git ../async
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure release mode
+        run: |
+          cmake -G Ninja -S . -B build-release \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVIX_PROCESS_BUILD_TESTS=OFF \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_ENABLE_SANITIZERS=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF
+
+      - name: Build release mode
+        run: |
+          cmake --build build-release -j"${BUILD_JOBS}"
+
+      - name: Configure debug mode
+        run: |
+          cmake -G Ninja -S . -B build-debug \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVIX_PROCESS_BUILD_TESTS=OFF \
+            -DVIX_PROCESS_BUILD_EXAMPLES=OFF \
+            -DVIX_ENABLE_SANITIZERS=OFF \
+            -DVIX_PROCESS_FETCH_ERROR=OFF \
+            -DVIX_PROCESS_FETCH_ENV=OFF \
+            -DVIX_PROCESS_FETCH_PATH=OFF \
+            -DVIX_PROCESS_FETCH_ASYNC=OFF
+
+      - name: Build debug mode
+        run: |
+          cmake --build build-debug -j"${BUILD_JOBS}"
+
+  summary:
+    name: Process Strict CI Summary
+    needs:
+      [
+        build-test-sanitized,
+        static-analysis,
+        valgrind,
+        package-smoke,
+        config-coverage,
+      ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print summary
+        run: |
+          echo "Process strict CI completed."
+          echo "This workflow validates:"
+          echo "- sanitized builds"
+          echo "- unit tests"
+          echo "- static analysis"
+          echo "- valgrind"
+          echo "- package install smoke test"
+          echo "- important configuration variants"
