@@ -1,0 +1,64 @@
+{
+  "namespace": "vix",
+  "name": "process",
+  "displayName": "Vix Process",
+  "version": "0.4.1",
+  "type": "library",
+  "license": "MIT",
+  "description": "Portable process management utilities for spawning, waiting, capturing output, and controlling system processes.",
+  "repository": "https://github.com/vixcpp/process.git",
+  "documentation": "https://github.com/vixcpp/process#readme",
+  "include": "include",
+  "standard": "c++20",
+  "keywords": [
+    "vix",
+    "cpp",
+    "process",
+    "spawn",
+    "command",
+    "portable"
+  ],
+  "authors": [
+    {
+      "name": "Gaspard Kirira"
+    }
+  ],
+  "maintainers": [
+    {
+      "name": "Gaspard Kirira"
+    }
+  ],
+  "exports": {
+    "modules": [
+      "vix::process"
+    ],
+    "namespaces": [
+      "vix::process"
+    ]
+  },
+  "constraints": {
+    "platforms": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "deps": [
+    {
+      "id": "vix/error",
+      "version": "0.3.1"
+    },
+    {
+      "id": "vix/env",
+      "version": "0.1.1"
+    },
+    {
+      "id": "vix/path",
+      "version": "0.3.1"
+    },
+    {
+      "id": "vix/async",
+      "version": "1.2.1"
+    }
+  ]
+}
