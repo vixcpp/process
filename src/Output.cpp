@@ -41,4 +41,21 @@ namespace vix::process
 #endif
   }
 
+  ProcessOutputResult output_streamed(Command command, const ProcessOutputCallbacks &callbacks)
+  {
+#ifndef _WIN32
+    return platform::output_posix_streamed(command, callbacks);
+#else
+    // Windows retains the safe captured implementation until its backend gains
+    // equivalent overlapped-pipe callbacks; callers still receive final text.
+    auto result = output(std::move(command));
+    if (result)
+    {
+      if (callbacks.stdout_chunk && !result.value().stdout_text.empty()) callbacks.stdout_chunk(result.value().stdout_text);
+      if (callbacks.stderr_chunk && !result.value().stderr_text.empty()) callbacks.stderr_chunk(result.value().stderr_text);
+    }
+    return result;
+#endif
+  }
+
 } // namespace vix::process

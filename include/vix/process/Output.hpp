@@ -18,9 +18,18 @@
 
 #include <vix/process/Command.hpp>
 #include <vix/process/ProcessResult.hpp>
+#include <functional>
+#include <string_view>
 
 namespace vix::process
 {
+  using ProcessOutputChunkCallback = std::function<void(std::string_view)>;
+
+  struct ProcessOutputCallbacks
+  {
+    ProcessOutputChunkCallback stdout_chunk;
+    ProcessOutputChunkCallback stderr_chunk;
+  };
   /**
    * @brief Run a command to completion and capture its output.
    *
@@ -41,6 +50,11 @@ namespace vix::process
    * @return ProcessOutputResult containing exit code and captured output.
    */
   [[nodiscard]] ProcessOutputResult output(Command command);
+
+  /** Run a structured command while delivering captured pipe chunks as they
+   * arrive. Both streams are consumed concurrently; the returned result still
+   * contains their complete text and exit code. */
+  [[nodiscard]] ProcessOutputResult output_streamed(Command command, const ProcessOutputCallbacks &callbacks);
 
 } // namespace vix::process
 
