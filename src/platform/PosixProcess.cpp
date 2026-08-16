@@ -266,43 +266,6 @@ namespace vix::process::platform
 #endif
     }
 
-    std::string read_fd_to_string(int fd, std::size_t chunk_size = 4096)
-    {
-      std::string out;
-
-      if (fd < 0)
-      {
-        return out;
-      }
-
-      std::vector<char> buffer(chunk_size);
-
-      while (true)
-      {
-        const ssize_t n = ::read(fd, buffer.data(), buffer.size());
-
-        if (n == 0)
-        {
-          break;
-        }
-
-        if (n < 0)
-        {
-          if (errno == EINTR)
-          {
-            continue;
-          }
-
-          throw std::runtime_error(
-              errno_message("read failed while reading process output", errno));
-        }
-
-        out.append(buffer.data(), static_cast<std::size_t>(n));
-      }
-
-      return out;
-    }
-
     std::vector<std::string> build_env_storage(const Command &command)
     {
       std::vector<std::string> env_storage;
@@ -1147,6 +1110,13 @@ namespace vix::process::platform
 
   [[nodiscard]] ProcessOutputResult output_posix(const Command &command)
   {
+    return output_posix_streamed(command, {});
+  }
+
+  [[nodiscard]] ProcessOutputResult output_posix_streamed(
+      const Command &command,
+      const ProcessOutputCallbacks &callbacks)
+  {
     if (!command.valid())
     {
       return make_process_error(
@@ -1197,7 +1167,15 @@ namespace vix::process::platform
           {
             try
             {
-              stdout_text = read_fd_to_string(backend->stdout_read_fd);
+              char buffer[4096];
+              for (;;)
+              {
+                const ssize_t count = ::read(backend->stdout_read_fd, buffer, sizeof(buffer));
+                if (count == 0) break;
+                if (count < 0) { if (errno == EINTR) continue; throw std::runtime_error(errno_message("stdout read failed", errno)); }
+                stdout_text.append(buffer, static_cast<std::size_t>(count));
+                if (callbacks.stdout_chunk) callbacks.stdout_chunk(std::string_view(buffer, static_cast<std::size_t>(count)));
+              }
             }
             catch (...)
             {
@@ -1210,7 +1188,15 @@ namespace vix::process::platform
           {
             try
             {
-              stderr_text = read_fd_to_string(backend->stderr_read_fd);
+              char buffer[4096];
+              for (;;)
+              {
+                const ssize_t count = ::read(backend->stderr_read_fd, buffer, sizeof(buffer));
+                if (count == 0) break;
+                if (count < 0) { if (errno == EINTR) continue; throw std::runtime_error(errno_message("stderr read failed", errno)); }
+                stderr_text.append(buffer, static_cast<std::size_t>(count));
+                if (callbacks.stderr_chunk) callbacks.stderr_chunk(std::string_view(buffer, static_cast<std::size_t>(count)));
+              }
             }
             catch (...)
             {

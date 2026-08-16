@@ -22,6 +22,7 @@
 
 #include <vix/error/Error.hpp>
 #include <vix/process/ProcessResult.hpp>
+#include <vix/process/Output.hpp>
 #include <vix/process/pipeline/Pipeline.hpp>
 
 namespace vix::process
@@ -107,6 +108,7 @@ namespace vix::process::platform
    * @brief Run a POSIX command to completion and capture output.
    */
   [[nodiscard]] ProcessOutputResult output_posix(const Command &command);
+  [[nodiscard]] ProcessOutputResult output_posix_streamed(const Command &command, const ProcessOutputCallbacks &callbacks);
 
   /**
    * @brief Forcefully kill a POSIX child process.
